@@ -21,7 +21,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download the model to avoid runtime delays
-RUN python -c "from ultralytics import YOLO; YOLO('yolo11n.pt')"
+# RUN python -c "from ultralytics import YOLO; YOLO('yolo11n.pt')"
 
 # Copy application code
 COPY . .
