@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Object Detection Results</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Detection Results</h1>
+        
+        <div class="navigation">
+            <a href="/" class="back-button">← Upload Another Image</a>
+        </div>
+        
+        <div class="result-summary">
+            <h2>Summary</h2>
+            <p>File: <span id="fileName"></span></p>
+            <p>Objects detected: <span id="objectCount"></span></p>
+            <p>Processing time: <span id="processingTime"></span> ms</p>
+            <p>Model: <span id="modelName"></span></p>
+        </div>
+        
+        <div class="detection-results">
+            <h2>Detected Objects</h2>
+            <div id="detectionList"></div>
+        </div>
+    </div>
+
+    <script>
+        // This would be populated with actual results data
+        document.addEventListener('DOMContentLoaded', function() {
+            // In a real implementation, this would get data from the server
+            const results = JSON.parse(localStorage.getItem('detectionResults') || '{}');
+            
+            if (results.success) {
+                document.getElementById('fileName').textContent = results.filename || 'Unknown';
+                document.getElementById('objectCount').textContent = results.results.total_objects || 0;
+                document.getElementById('processingTime').textContent = results.results.processing_time_ms || 0;
+                document.getElementById('modelName').textContent = results.results.model_info.model_name || 'Unknown';
+                
+                const detectionList = document.getElementById('detectionList');
+                results.results.detections.forEach(detection => {
+                    const item = document.createElement('div');
+                    item.className = 'detection-item';
+                    item.innerHTML = `
+                        <h3>${detection.class_name} (${(detection.confidence * 100).toFixed(2)}%)</h3>
+                        <p>Position: (${detection.bbox.x1}, ${detection.bbox.y1}) to (${detection.bbox.x2}, ${detection.bbox.y2})</p>
+                        <p>Size: ${detection.bbox.width} x ${detection.bbox.height} pixels</p>
+                    `;
+                    detectionList.appendChild(item);
+                });
+            } else {
+                document.querySelector('.result-summary').innerHTML = '<p>Error loading results</p>';
+            }
+        });
+    </script>
+</body>
+</html>

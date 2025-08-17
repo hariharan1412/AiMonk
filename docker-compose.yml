@@ -1,0 +1,57 @@
+version: '3.8'
+services:
+  ui-backend:
+    build: 
+      context: ./ui-backend
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - AI_BACKEND_URL=http://ai-backend:5001
+      - FLASK_ENV=production
+      - UPLOAD_TIMEOUT=30
+    depends_on:
+      ai-backend:
+        condition: service_healthy
+    volumes:
+      - ./outputs:/app/outputs
+    networks:
+      - detection-network
+    restart: unless-stopped
+
+  ai-backend:
+    build:
+      context: ./ai-backend
+      dockerfile: Dockerfile
+    ports:
+      - "5001:5001"
+    environment:
+      - FLASK_ENV=production
+      - MODEL_NAME=yolo11n.pt
+      - CONFIDENCE_THRESHOLD=0.25
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./outputs:/app/outputs
+      - model-cache:/root/.cache/ultralytics
+    networks:
+      - detection-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5001/health', timeout=5)"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s  # Give more time for model loading
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+volumes:
+  model-cache:
+
+networks:
+  detection-network:
+    driver: bridge

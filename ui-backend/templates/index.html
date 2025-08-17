@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Object Detection Microservice</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Object Detection Service</h1>
+        
+        <div class="upload-section">
+            <div class="file-input-container">
+                <input type="file" id="imageInput" accept="image/*" hidden>
+                <label for="imageInput" class="file-input-label">
+                    Choose Image File
+                </label>
+                <span id="fileName">No file selected</span>
+            </div>
+            <button id="detectButton" class="detect-button" disabled>Detect Objects</button>
+        </div>
+        
+        <div id="loadingIndicator" class="loading-indicator hidden">
+            <div class="spinner"></div>
+            <p>Processing image... AI backend is analyzing objects</p>
+        </div>
+        
+        <div id="imageContainer" class="image-container hidden">
+            <h2>📷 Image with Detections</h2>
+            <canvas id="canvasOverlay"></canvas>
+        </div>
+        
+        <div id="resultsContainer" class="results-container hidden">
+            <h2>Detection Results</h2>
+            <div id="resultsContent"></div>
+        </div>
+        
+        <div id="jsonContainer" class="json-container hidden">
+            <h2>🔧 Raw JSON Response</h2>
+            <pre id="jsonOutput"></pre>
+        </div>
+        
+        <div id="errorMessage" class="error-message hidden">
+            <h2>❌ Error</h2>
+            <p id="errorText"></p>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

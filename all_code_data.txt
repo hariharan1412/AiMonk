@@ -1,0 +1,1461 @@
+# Collected code files for project
+# Generated: 2025-08-17T12:27:28.236298Z
+# Note: missing files will be reported below
+
+
+
+================================================================================
+FILE: README.md
+COLLECTED_AT: 2025-08-17T12:27:28.236298Z
+================================================================================
+
+# Object Detection Microservice
+
+A production-ready microservice for object detection using YOLOv11, with a clean web interface and scalable architecture.
+
+## Architecture
+
+The system consists of two main services:
+
+1. **UI Backend** (Port 5000): Handles user interface, file uploads, and communicates with the AI backend
+2. **AI Backend** (Port 5001): Handles YOLOv11 model loading and object detection
+
+## Features
+
+- Web-based interface for image uploads
+- Real-time object detection using YOLOv11 Nano
+- Structured JSON responses with detection results
+- Robust error handling and validation
+- Docker containerization for easy deployment
+- Health check endpoints for monitoring
+
+## Quick Start
+
+### Prerequisites
+
+- Docker and Docker Compose installed
+
+### Running the Application
+
+1. Clone this repository
+2. Navigate to the project directory
+3. Run the following command:
+
+```bash
+docker-compose up --build
+
+
+# curl -X POST -F "image=@test_images/sample.jpg" http://localhost:5000/upload
+
+================================================================================
+FILE: ai-backend/.env
+COLLECTED_AT: 2025-08-17T12:27:28.236298Z
+================================================================================
+
+FLASK_ENV=production
+MODEL_NAME=yolo11n.pt
+CONFIDENCE_THRESHOLD=0.25
+MAX_IMAGE_SIZE=16777216
+LOG_LEVEL=INFO
+
+================================================================================
+FILE: ai-backend/app.py
+COLLECTED_AT: 2025-08-17T12:27:28.253981Z
+================================================================================
+
+from flask import Flask, request, jsonify
+import cv2
+import numpy as np
+from ultralytics import YOLO
+import logging
+import time
+import os
+import uuid
+from detector import ObjectDetector
+from utils import validate_image, format_detection_results
+
+app = Flask(__name__)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Initialize detector
+detector = None
+
+def initialize_detector():
+    """Initialize YOLO detector with error handling"""
+    global detector
+    try:
+        logger.info("Initializing YOLOv11 nano detector...")
+        detector = ObjectDetector(model_name='yolo11n.pt')
+        logger.info("Detector initialized successfully")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to initialize detector: {str(e)}")
+        return False
+
+@app.route('/detect', methods=['POST'])
+def detect_objects():
+    """Main detection endpoint"""
+    start_time = time.time()
+    request_id = request.headers.get('X-Request-ID', str(uuid.uuid4()))
+    
+    logger.info(f"Processing detection request {request_id}")
+    
+    try:
+        # Check if model is loaded
+        if not detector or not detector.is_ready():
+            return jsonify({
+                'error': 'AI model not ready',
+                'error_code': 'MODEL_NOT_LOADED'
+            }), 503
+        
+        # Validate request
+        if 'image' not in request.files:
+            return jsonify({
+                'error': 'No image file provided',
+                'error_code': 'NO_IMAGE_FILE'
+            }), 400
+        
+        image_file = request.files['image']
+        
+        # Check file size (16MB limit)
+        image_file.seek(0, os.SEEK_END)
+        file_size = image_file.tell()
+        image_file.seek(0)
+        
+        if file_size > 16 * 1024 * 1024:
+            return jsonify({
+                'error': 'Image file too large (max 16MB)',
+                'error_code': 'FILE_TOO_LARGE'
+            }), 413
+        
+        # Validate image
+        is_valid, error_msg = validate_image(image_file)
+        if not is_valid:
+            return jsonify({
+                'error': error_msg,
+                'error_code': 'INVALID_IMAGE'
+            }), 400
+        
+        # Convert to OpenCV format
+        image_array = np.frombuffer(image_file.read(), np.uint8)
+        image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+        
+        if image is None:
+            return jsonify({
+                'error': 'Invalid image format or corrupted file',
+                'error_code': 'INVALID_IMAGE_FORMAT'
+            }), 400
+        
+        # Perform detection
+        logger.info(f"Running detection for request {request_id}")
+        detections, model_info = detector.detect(image)
+        
+        # Calculate processing time
+        processing_time = round((time.time() - start_time) * 1000, 2)  # ms
+        
+        # Format results
+        result = format_detection_results(
+            detections=detections,
+            model_info=model_info,
+            processing_time=processing_time,
+            request_id=request_id,
+            image_shape=image.shape
+        )
+        
+        logger.info(f"Request {request_id} completed in {processing_time}ms - found {len(detections)} objects")
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        processing_time = round((time.time() - start_time) * 1000, 2)
+        logger.error(f"Detection failed for request {request_id}: {str(e)}")
+        return jsonify({
+            'error': f'Detection processing failed: {str(e)}',
+            'error_code': 'DETECTION_FAILED',
+            'processing_time_ms': processing_time
+        }), 500
+
+@app.route('/health')
+def health_check():
+    """Health check with model status"""
+    model_status = "loaded" if detector and detector.is_ready() else "not_loaded"
+    
+    return jsonify({
+        'service': 'ai-backend',
+        'status': 'healthy',
+        'model_status': model_status,
+        'model_name': 'YOLOv11 Nano',
+        'coco_classes_count': 80,
+        'timestamp': '2025-08-16T15:42:00'
+    })
+
+@app.route('/model/info')
+def model_info():
+    """Get detailed model information"""
+    if not detector:
+        return jsonify({
+            'error': 'Model not loaded',
+            'error_code': 'MODEL_NOT_LOADED'
+        }), 503
+    
+    return jsonify(detector.get_model_info())
+
+if __name__ == '__main__':
+    # Initialize detector on startup
+    if not initialize_detector():
+        logger.critical("Failed to initialize detector - exiting")
+        exit(1)
+    
+    app.run(host='0.0.0.0', port=5001, debug=False)
+
+================================================================================
+FILE: ai-backend/detector.py
+COLLECTED_AT: 2025-08-17T12:27:28.253981Z
+================================================================================
+
+from ultralytics import YOLO
+import cv2
+import numpy as np
+import logging
+
+logger = logging.getLogger(__name__)
+
+class ObjectDetector:
+    def __init__(self, model_name='yolo11n.pt', confidence_threshold=0.25):
+        self.model_name = model_name
+        self.confidence_threshold = confidence_threshold
+        self.model = None
+        self.load_model()
+    
+    def load_model(self):
+        """Load YOLOv11 model"""
+        try:
+            logger.info(f"Loading {self.model_name}...")
+            self.model = YOLO(self.model_name)
+            logger.info(f"Model loaded successfully - {len(self.model.names)} classes available")
+            
+            # Warmup the model with a dummy image
+            self.warmup_model()
+        except Exception as e:
+            logger.error(f"Failed to load model: {str(e)}")
+            raise
+    
+    def warmup_model(self):
+        """Warmup model with dummy inference"""
+        try:
+            logger.info("Warming up model...")
+            dummy_image = np.zeros((640, 640, 3), dtype=np.uint8)
+            _ = self.model(dummy_image, conf=self.confidence_threshold, verbose=False)
+            logger.info("Model warmup completed")
+        except Exception as e:
+            logger.warning(f"Model warmup failed: {str(e)}")
+    
+    def is_ready(self):
+        """Check if model is ready for inference"""
+        return self.model is not None
+    
+    def detect(self, image):
+        """Perform object detection"""
+        if not self.is_ready():
+            raise RuntimeError("Model not loaded")
+        
+        # Run inference
+        results = self.model(image, conf=self.confidence_threshold, verbose=False)
+        
+        detections = []
+        for result in results:
+            boxes = result.boxes
+            if boxes is not None:
+                for box in boxes:
+                    x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                    # Fixed: Access first element of confidence tensor
+                    confidence = float(box.conf[0].cpu().numpy())
+                    class_id = int(box.cls.cpu().numpy())
+                    class_name = self.model.names[class_id]
+                    
+                    detection = {
+                        'class_id': class_id,
+                        'class_name': class_name,
+                        'confidence': round(confidence, 4),
+                        'bbox': {
+                            'x1': int(x1), 'y1': int(y1),
+                            'x2': int(x2), 'y2': int(y2),
+                            'width': int(x2 - x1),
+                            'height': int(y2 - y1),
+                            'center_x': int((x1 + x2) / 2),
+                            'center_y': int((y1 + y2) / 2)
+                        }
+                    }
+                    detections.append(detection)
+        
+        model_info = {
+            'model_name': self.model_name,
+            'total_classes': len(self.model.names),
+            'confidence_threshold': self.confidence_threshold
+        }
+        
+        return detections, model_info
+    
+    def get_model_info(self):
+        """Get detailed model information"""
+        if not self.is_ready():
+            return {'error': 'Model not loaded'}
+        
+        return {
+            'model_name': self.model_name,
+            'class_names': list(self.model.names.values()),
+            'total_classes': len(self.model.names),
+            'confidence_threshold': self.confidence_threshold,
+            'input_size': 640  # YOLOv11 default
+        }
+
+================================================================================
+FILE: ai-backend/requirements.txt
+COLLECTED_AT: 2025-08-17T12:27:28.254549Z
+================================================================================
+
+Flask==2.3.3
+ultralytics==8.3.179
+opencv-python==4.8.0.76
+numpy==1.24.3
+requests==2.31.0
+torch==2.3.1 
+torchvision==0.18.1
+
+
+
+
+================================================================================
+FILE: ai-backend/utils.py
+COLLECTED_AT: 2025-08-17T12:27:28.254549Z
+================================================================================
+
+import logging
+import numpy as np
+import cv2
+
+logger = logging.getLogger(__name__)
+
+def validate_image(image_file):
+    """Validate uploaded image file"""
+    try:
+        # Store original position
+        original_position = image_file.tell()
+        
+        # Check if file is empty
+        if image_file.filename == '':
+            return False, "No file selected"
+        
+        # Check file extension
+        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'webp'}
+        file_ext = image_file.filename.rsplit('.', 1)[1].lower() if '.' in image_file.filename else ''
+        
+        if file_ext not in allowed_extensions:
+            return False, f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
+        
+        # Check if file is actually an image
+        file_content = image_file.read()
+        if len(file_content) == 0:
+            return False, "Empty file provided"
+            
+        image_array = np.frombuffer(file_content, np.uint8)
+        image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+        
+        # Reset file pointer to original position
+        image_file.seek(original_position)
+        
+        if image is None:
+            return False, "Invalid image format or corrupted file"
+        
+        return True, "Valid image file"
+    
+    except Exception as e:
+        logger.error(f"Image validation error: {str(e)}")
+        # Ensure file pointer is reset even on error
+        try:
+            image_file.seek(0)
+        except:
+            pass
+        return False, f"Validation error: {str(e)}"
+
+def format_detection_results(detections, model_info, processing_time, request_id, image_shape):
+    """Format detection results into structured response"""
+    return {
+        'success': True,
+        'request_id': request_id,
+        'detections': detections,
+        'total_objects': len(detections),
+        'processing_time_ms': processing_time,
+        'model_info': model_info,
+        'image_info': {
+            'width': int(image_shape[1]),
+            'height': int(image_shape[0]),
+            'channels': int(image_shape[2])
+        }
+    }
+
+================================================================================
+FILE: ai-backend/Dockerfile
+COLLECTED_AT: 2025-08-17T12:27:28.254549Z
+================================================================================
+
+FROM python:3.9-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Pre-download the model to avoid runtime delays
+RUN python -c "from ultralytics import YOLO; YOLO('yolo11n.pt')"
+
+# Copy application code
+COPY . .
+
+# Create output directory
+RUN mkdir -p outputs
+
+# Expose port
+EXPOSE 5001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:5001/health', timeout=5)" || exit 1
+
+# Run the application
+CMD ["python", "app.py"]
+
+================================================================================
+FILE: ai_tool.py
+COLLECTED_AT: 2025-08-17T12:27:28.254549Z
+================================================================================
+
+#!/usr/bin/env python3
+"""
+collect_code_files.py
+
+Collect specified source files into a single text file (all_code_data.txt).
+If a file is missing, the script logs a warning in the output and to stdout
+but continues processing the rest.
+"""
+
+import os
+from datetime import datetime
+
+monitor_files = [
+    "README.md",
+    "ai-backend/.env",
+    "ai-backend/app.py",
+    "ai-backend/detector.py",
+    "ai-backend/requirements.txt",
+    "ai-backend/utils.py",
+    "ai-backend/Dockerfile",
+    "ai_tool.py",
+    "docker-compose.yml",
+    "run.sh",
+    "tools.py",
+    "ui-backend/.env",
+    "ui-backend/app.py",
+    "ui-backend/requirements.txt",
+    "ui-backend/static/script.js",
+    "ui-backend/static/style.css",
+    "ui-backend/templates/index.html",
+    "ui-backend/templates/result.html",
+    "ui-backend/Dockerfile",
+]
+
+OUT_PATH = "all_code_data.txt"
+
+def write_header(out_f, path):
+    out_f.write("\n\n")
+    out_f.write("=" * 80 + "\n")
+    out_f.write(f"FILE: {path}\n")
+    out_f.write(f"COLLECTED_AT: {datetime.utcnow().isoformat()}Z\n")
+    out_f.write("=" * 80 + "\n\n")
+
+def main():
+    missing = []
+    with open(OUT_PATH, "w", encoding="utf-8") as out_f:
+        out_f.write(f"# Collected code files for project\n# Generated: {datetime.utcnow().isoformat()}Z\n")
+        out_f.write("# Note: missing files will be reported below\n\n")
+
+        for file_path in monitor_files:
+            write_header(out_f, file_path)
+
+            if not os.path.exists(file_path):
+                msg = f"[WARNING] File not found: {file_path}\n"
+                out_f.write(msg)
+                print(msg.strip())
+                missing.append(file_path)
+                continue
+
+            try:
+                with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                    content = f.read()
+                    out_f.write(content)
+            except Exception as e:
+                err_msg = f"[ERROR] Failed to read {file_path}: {e}\n"
+                out_f.write(err_msg)
+                print(err_msg.strip())
+                missing.append(file_path)
+
+    print("\nDone. Output written to:", OUT_PATH)
+    if missing:
+        print("Some files were missing or unreadable:")
+        for m in missing:
+            print(" -", m)
+    else:
+        print("All files collected successfully.")
+
+if __name__ == "__main__":
+    main()
+
+
+================================================================================
+FILE: docker-compose.yml
+COLLECTED_AT: 2025-08-17T12:27:28.255105Z
+================================================================================
+
+version: '3.8'
+services:
+  ui-backend:
+    build: 
+      context: ./ui-backend
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - AI_BACKEND_URL=http://ai-backend:5001
+      - FLASK_ENV=production
+      - UPLOAD_TIMEOUT=30
+    depends_on:
+      ai-backend:
+        condition: service_healthy
+    volumes:
+      - ./outputs:/app/outputs
+    networks:
+      - detection-network
+    restart: unless-stopped
+
+  ai-backend:
+    build:
+      context: ./ai-backend
+      dockerfile: Dockerfile
+    ports:
+      - "5001:5001"
+    environment:
+      - FLASK_ENV=production
+      - MODEL_NAME=yolo11n.pt
+      - CONFIDENCE_THRESHOLD=0.25
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./outputs:/app/outputs
+      - model-cache:/root/.cache/ultralytics
+    networks:
+      - detection-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5001/health', timeout=5)"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s  # Give more time for model loading
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+volumes:
+  model-cache:
+
+networks:
+  detection-network:
+    driver: bridge
+
+================================================================================
+FILE: run.sh
+COLLECTED_AT: 2025-08-17T12:27:28.255105Z
+================================================================================
+
+#!/bin/bash
+
+# Object Detection Microservice Start Script
+
+echo "🚀 Starting Object Detection Microservice..."
+
+# Check if Docker is installed
+if ! command -v docker &> /dev/null; then
+    echo "❌ Error: Docker is not installed. Please install Docker first."
+    exit 1
+fi
+
+# Check if Docker Compose is installed
+if ! command -v docker-compose &> /dev/null; then
+    echo "❌ Error: Docker Compose is not installed. Please install Docker Compose first."
+    exit 1
+fi
+
+# Create necessary directories if they don't exist
+mkdir -p outputs test_images
+
+# Create .env files if they don't exist
+if [ ! -f ai-backend/.env ]; then
+    echo "Creating AI backend .env file..."
+    cat > ai-backend/.env << EOL
+FLASK_ENV=production
+MODEL_NAME=yolo11n.pt
+CONFIDENCE_THRESHOLD=0.25
+MAX_IMAGE_SIZE=16777216
+LOG_LEVEL=INFO
+EOL
+fi
+
+if [ ! -f ui-backend/.env ]; then
+    echo "Creating UI backend .env file..."
+    cat > ui-backend/.env << EOL
+FLASK_ENV=production
+AI_BACKEND_URL=http://ai-backend:5001
+MAX_CONTENT_LENGTH=16777216
+UPLOAD_TIMEOUT=30
+LOG_LEVEL=INFO
+EOL
+fi
+
+# Build and start the services
+echo "🔨 Building and starting services..."
+docker-compose up --build
+
+# If the script reaches here, it means the services were stopped
+echo "🛑 Services stopped."
+
+================================================================================
+FILE: tools.py
+COLLECTED_AT: 2025-08-17T12:27:28.255105Z
+================================================================================
+
+import os
+
+# Define the folder structure
+structure = {
+    "ui-backend": {
+        "templates": ["index.html", "result.html"],
+        "static": ["style.css", "script.js"],
+        "files": ["app.py", "requirements.txt", "Dockerfile"]
+    },
+    "ai-backend": {
+        "files": ["app.py", "detector.py", "utils.py", "requirements.txt", "Dockerfile"]
+    },
+    "outputs": {},
+    "test_images": {},
+    "files": ["docker-compose.yml", "README.md", "run.sh"]
+    
+}
+
+def create_structure(base_path, structure_dict):
+    for name, content in structure_dict.items():
+        dir_path = os.path.join(base_path, name)
+        if isinstance(content, dict):
+            os.makedirs(dir_path, exist_ok=True)
+            # Handle files inside dict
+            files = content.get("files", [])
+            for f in files:
+                open(os.path.join(dir_path, f), "a").close()
+            # Recurse into subdirectories
+            for subname, subcontent in content.items():
+                if subname not in ["files"]:
+                    create_structure(dir_path, {subname: subcontent})
+        else:
+            # If content is just a list of files
+            os.makedirs(base_path, exist_ok=True)
+            for f in content:
+                open(os.path.join(base_path, f), "a").close()
+
+if __name__ == "__main__":
+    create_structure(".", structure)
+    print("✅ Project structure created successfully!")
+
+
+================================================================================
+FILE: ui-backend/.env
+COLLECTED_AT: 2025-08-17T12:27:28.255105Z
+================================================================================
+
+FLASK_ENV=production
+AI_BACKEND_URL=http://127.0.0.1:5001
+MAX_CONTENT_LENGTH=16777216
+UPLOAD_TIMEOUT=30
+LOG_LEVEL=INFO
+
+================================================================================
+FILE: ui-backend/app.py
+COLLECTED_AT: 2025-08-17T12:27:28.255105Z
+================================================================================
+
+from flask import Flask, request, render_template, jsonify, send_from_directory
+import requests
+import os
+import json
+import uuid
+from werkzeug.utils import secure_filename
+import logging
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_cors import CORS
+
+app = Flask(__name__)
+CORS(app, origins=['http://localhost:5000', 'http://127.0.0.1:5000'])
+
+# Configure rate limiting
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["200 per day", "50 per hour", "5 per minute"]
+)
+
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['UPLOAD_FOLDER'] = 'uploads'
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# AI Backend configuration
+AI_BACKEND_URL = os.getenv('AI_BACKEND_URL', 'http://127.0.0.1:5001')
+
+print("AI_BACKEND_URL: ", AI_BACKEND_URL)
+
+
+AI_BACKEND_TIMEOUT = int(os.getenv('UPLOAD_TIMEOUT', 30))
+
+# Allowed file extensions
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'webp'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def validate_image_file(file):
+    """Validate uploaded image file"""
+    if not file or file.filename == '':
+        return False, "No file selected"
+    
+    if not allowed_file(file.filename):
+        return False, f"Invalid file type. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
+    
+    return True, "Valid file"
+
+@app.route('/')
+def index():
+    """Serve main upload interface"""
+    return render_template('index.html')
+
+@app.route('/upload', methods=['POST'])
+@limiter.limit("10 per minute")  # Limit detection requests
+def upload_and_detect():
+    """Handle image upload and trigger detection"""
+    try:
+        # Validate request
+        if 'image' not in request.files:
+            return jsonify({
+                'error': 'No image file provided',
+                'error_code': 'NO_IMAGE_FILE'
+            }), 400
+        
+        file = request.files['image']
+        is_valid, message = validate_image_file(file)
+        
+        if not is_valid:
+            return jsonify({
+                'error': message,
+                'error_code': 'INVALID_FILE'
+            }), 400
+        
+        # Generate unique request ID for tracking
+        request_id = str(uuid.uuid4())
+        logger.info(f"Processing request {request_id} for file: {file.filename}")
+        
+        # Prepare file for AI backend
+        files = {
+            'image': (file.filename, file.read(), file.content_type)
+        }
+        
+        # Bridge to AI Backend
+        detection_result = call_ai_backend(files, request_id)
+        
+        if detection_result['success']:
+            logger.info(f"Request {request_id} completed successfully")
+            return jsonify({
+                'success': True,
+                'request_id': request_id,
+                'filename': secure_filename(file.filename),
+                'results': detection_result['data']
+            })
+        else:
+            logger.error(f"Request {request_id} failed: {detection_result['error']}")
+            return jsonify({
+                'success': False,
+                'error': detection_result['error'],
+                'error_code': detection_result.get('error_code', 'UNKNOWN_ERROR')
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        return jsonify({
+            'error': 'Internal server error',
+            'error_code': 'INTERNAL_ERROR'
+        }), 500
+
+def call_ai_backend(files, request_id):
+    """Communication bridge to AI Backend"""
+    try:
+        logger.info(f"Calling AI backend for request {request_id}")
+        
+        # Make request to AI backend
+        response = requests.post(
+            f"{AI_BACKEND_URL}/detect",
+            files=files,
+            headers={'X-Request-ID': request_id},
+            timeout=AI_BACKEND_TIMEOUT
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            logger.info(f"AI backend responded successfully for {request_id}")
+            return {'success': True, 'data': data}
+        else:
+            error_msg = f"AI backend error: {response.status_code}"
+            error_code = 'AI_BACKEND_ERROR'
+            try:
+                error_data = response.json()
+                error_msg = error_data.get('error', error_msg)
+                error_code = error_data.get('error_code', error_code)
+            except:
+                pass
+            
+            return {'success': False, 'error': error_msg, 'error_code': error_code}
+            
+    except requests.exceptions.Timeout:
+        return {'success': False, 'error': 'AI backend timeout - processing took too long', 'error_code': 'AI_TIMEOUT'}
+    except requests.exceptions.ConnectionError:
+        return {'success': False, 'error': 'AI backend unavailable - service may be down', 'error_code': 'AI_UNAVAILABLE'}
+    except requests.exceptions.RequestException as e:
+        return {'success': False, 'error': f'Communication error: {str(e)}', 'error_code': 'COMMUNICATION_ERROR'}
+
+@app.route('/health')
+def health_check():
+    """Health check endpoint"""
+    # Also check AI backend health
+    try:
+        response = requests.get(f"{AI_BACKEND_URL}/health", timeout=5)
+        ai_status = "healthy" if response.status_code == 200 else "unhealthy"
+    except:
+        ai_status = "unreachable"
+    
+    return jsonify({
+        'service': 'ui-backend',
+        'status': 'healthy',
+        'ai_backend_status': ai_status,
+        'timestamp': '2025-08-16T15:42:00'
+    })
+
+if __name__ == '__main__':
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    app.run(host='0.0.0.0', port=5000, debug=False)
+
+================================================================================
+FILE: ui-backend/requirements.txt
+COLLECTED_AT: 2025-08-17T12:27:28.255105Z
+================================================================================
+
+Flask==2.3.3
+requests==2.31.0
+Werkzeug==2.3.7
+Flask-Limiter==3.3.1
+Flask-Cors==4.0.0
+
+================================================================================
+FILE: ui-backend/static/script.js
+COLLECTED_AT: 2025-08-17T12:27:28.255105Z
+================================================================================
+
+document.addEventListener('DOMContentLoaded', function() {
+    const imageInput = document.getElementById('imageInput');
+    const fileName = document.getElementById('fileName');
+    const detectButton = document.getElementById('detectButton');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    const imageContainer = document.getElementById('imageContainer');
+    const resultsContainer = document.getElementById('resultsContainer');
+    const resultsContent = document.getElementById('resultsContent');
+    const jsonContainer = document.getElementById('jsonContainer');
+    const jsonOutput = document.getElementById('jsonOutput');
+    const errorMessage = document.getElementById('errorMessage');
+    const errorText = document.getElementById('errorText');
+    
+    let selectedFile = null;
+    
+    // Handle file selection
+    imageInput.addEventListener('change', function() {
+        if (this.files && this.files[0]) {
+            selectedFile = this.files[0];
+            fileName.textContent = selectedFile.name;
+            detectButton.disabled = false;
+        } else {
+            selectedFile = null;
+            fileName.textContent = 'No file selected';
+            detectButton.disabled = true;
+        }
+    });
+    
+    // Handle detection button click
+    detectButton.addEventListener('click', function() {
+        if (!selectedFile) {
+            showError('Please select an image file first');
+            return;
+        }
+        
+        const formData = new FormData();
+        formData.append('image', selectedFile);
+        
+        // Show loading, hide results
+        loadingIndicator.classList.remove('hidden');
+        imageContainer.classList.add('hidden');
+        resultsContainer.classList.add('hidden');
+        jsonContainer.classList.add('hidden');
+        errorMessage.classList.add('hidden');
+        
+        // Send request to backend
+        fetch('/upload', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            loadingIndicator.classList.add('hidden');
+            
+            if (data.success) {
+                // Store results
+                localStorage.setItem('detectionResults', JSON.stringify(data));
+                
+                // Display image with bounding boxes
+                drawImageWithBoxes(selectedFile, data.results.detections);
+                
+                // Display results summary
+                displayResults(data);
+                
+                // Display raw JSON
+                displayJSON(data);
+            } else {
+                showError(data.error || 'Unknown error occurred');
+            }
+        })
+        .catch(error => {
+            loadingIndicator.classList.add('hidden');
+            showError('Network error: ' + error.message);
+        });
+    });
+    
+    function drawImageWithBoxes(imageFile, detections) {
+        const canvas = document.getElementById('canvasOverlay');
+        const ctx = canvas.getContext('2d');
+        
+        const img = new Image();
+        img.onload = function() {
+            // Set canvas size to image size
+            canvas.width = img.width;
+            canvas.height = img.height;
+            
+            // Draw the image
+            ctx.drawImage(img, 0, 0);
+            
+            // Draw bounding boxes
+            ctx.strokeStyle = '#ff0000';
+            ctx.lineWidth = 3;
+            ctx.font = '16px Arial';
+            ctx.fillStyle = '#ff0000';
+            ctx.textAlign = 'left';
+            
+            detections.forEach(detection => {
+                const bbox = detection.bbox;
+                
+                // Draw rectangle
+                ctx.strokeRect(bbox.x1, bbox.y1, bbox.width, bbox.height);
+                
+                // Draw label background
+                const label = `${detection.class_name} (${(detection.confidence * 100).toFixed(1)}%)`;
+                const textWidth = ctx.measureText(label).width;
+                ctx.fillStyle = '#ff0000';
+                ctx.fillRect(bbox.x1, bbox.y1 - 25, textWidth + 10, 25);
+                
+                // Draw label text
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText(label, bbox.x1 + 5, bbox.y1 - 8);
+                ctx.fillStyle = '#ff0000';
+            });
+        };
+        
+        // Convert file to data URL
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(imageFile);
+        
+        // Show image container
+        imageContainer.classList.remove('hidden');
+    }
+    
+    function displayResults(data) {
+        resultsContainer.classList.remove('hidden');
+        
+        // Create summary HTML
+        const summaryHTML = `
+            <div class="result-summary">
+                <h2>📊 Summary</h2>
+                <p>File: ${data.filename}</p>
+                <p>Objects detected: ${data.results.total_objects}</p>
+                <p>Processing time: ${data.results.processing_time_ms} ms</p>
+                <p>Model: ${data.results.model_info.model_name}</p>
+                <p>Image size: ${data.results.image_info.width} × ${data.results.image_info.height}</p>
+            </div>
+        `;
+        
+        // Create detections list HTML
+        let detectionsHTML = '<div class="detection-results"><h2>🎯 Detected Objects</h2>';
+        
+        if (data.results.detections.length === 0) {
+            detectionsHTML += '<p>No objects detected in the image.</p>';
+        } else {
+            data.results.detections.forEach((detection, index) => {
+                detectionsHTML += `
+                    <div class="detection-item">
+                        <h3>${index + 1}. ${detection.class_name} (${(detection.confidence * 100).toFixed(2)}% confidence)</h3>
+                        <p>Position: (${detection.bbox.x1}, ${detection.bbox.y1}) to (${detection.bbox.x2}, ${detection.bbox.y2})</p>
+                        <p>Size: ${detection.bbox.width} × ${detection.bbox.height} pixels</p>
+                        <p>Center: (${detection.bbox.center_x}, ${detection.bbox.center_y})</p>
+                    </div>
+                `;
+            });
+        }
+        
+        detectionsHTML += '</div>';
+        
+        // Set content
+        resultsContent.innerHTML = summaryHTML + detectionsHTML;
+    }
+    
+    function displayJSON(data) {
+        jsonOutput.textContent = JSON.stringify(data, null, 2);
+        jsonContainer.classList.remove('hidden');
+    }
+    
+    function showError(message) {
+        errorMessage.classList.remove('hidden');
+        errorText.textContent = message;
+    }
+});
+
+================================================================================
+FILE: ui-backend/static/style.css
+COLLECTED_AT: 2025-08-17T12:27:28.255105Z
+================================================================================
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.6;
+    color: #333;
+    background-color: #f8f9fa;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1000px;
+    margin: 0 auto;
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    padding: 30px;
+}
+
+h1 {
+    text-align: center;
+    margin-bottom: 30px;
+    color: #2c3e50;
+}
+
+.upload-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 30px;
+    padding: 20px;
+    border: 2px dashed #ddd;
+    border-radius: 8px;
+    background-color: #f9f9f9;
+}
+
+.file-input-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 20px;
+    width: 100%;
+}
+
+.file-input-label {
+    display: inline-block;
+    padding: 12px 24px;
+    background-color: #3498db;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    margin-bottom: 10px;
+}
+
+.file-input-label:hover {
+    background-color: #2980b9;
+}
+
+#fileName {
+    margin-top: 10px;
+    font-style: italic;
+    color: #666;
+}
+
+.detect-button {
+    padding: 12px 24px;
+    background-color: #2ecc71;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s;
+}
+
+.detect-button:hover:not(:disabled) {
+    background-color: #27ae60;
+}
+
+.detect-button:disabled {
+    background-color: #95a5a6;
+    cursor: not-allowed;
+}
+
+.loading-indicator {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+}
+
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 5px solid rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    border-top-color: #3498db;
+    animation: spin 1s ease-in-out infinite;
+    margin-bottom: 15px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.results-container {
+    margin-top: 20px;
+}
+
+.detection-item {
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 15px;
+    margin-bottom: 15px;
+    background-color: #f9f9f9;
+}
+
+.detection-item h3 {
+    margin-bottom: 10px;
+    color: #2c3e50;
+}
+
+.error-message {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #ffeaea;
+    border-left: 5px solid #e74c3c;
+    border-radius: 4px;
+}
+
+.error-message h2 {
+    color: #e74c3c;
+    margin-bottom: 10px;
+}
+
+.hidden {
+    display: none;
+}
+
+.navigation {
+    margin-bottom: 20px;
+}
+
+.back-button {
+    display: inline-block;
+    padding: 8px 16px;
+    background-color: #3498db;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    transition: background-color 0.3s;
+}
+
+.back-button:hover {
+    background-color: #2980b9;
+}
+
+.result-summary {
+    margin-bottom: 30px;
+    padding: 15px;
+    background-color: #f0f8ff;
+    border-radius: 5px;
+}
+
+.result-summary p {
+    margin-bottom: 8px;
+}
+
+.result-summary span {
+    font-weight: bold;
+}
+
+.detection-results {
+    margin-top: 20px;
+}
+
+.detection-results h2 {
+    margin-bottom: 15px;
+    color: #2c3e50;
+}
+
+/* NEW STYLES FOR IMAGE AND JSON DISPLAY */
+.image-container {
+    margin-top: 20px;
+    text-align: center;
+}
+
+#canvasOverlay {
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    max-width: 100%;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.json-container {
+    margin-top: 20px;
+}
+
+#jsonOutput {
+    background-color: #f8f9fa;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 15px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    max-height: 400px;
+    overflow-y: auto;
+    color: #333;
+}
+
+.json-container h2 {
+    color: #2c3e50;
+    margin-bottom: 15px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .container {
+        padding: 15px;
+    }
+    
+    h1 {
+        font-size: 24px;
+    }
+    
+    .upload-section {
+        padding: 15px;
+    }
+}
+
+================================================================================
+FILE: ui-backend/templates/index.html
+COLLECTED_AT: 2025-08-17T12:27:28.255105Z
+================================================================================
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Object Detection Microservice</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Object Detection Service</h1>
+        
+        <div class="upload-section">
+            <div class="file-input-container">
+                <input type="file" id="imageInput" accept="image/*" hidden>
+                <label for="imageInput" class="file-input-label">
+                    Choose Image File
+                </label>
+                <span id="fileName">No file selected</span>
+            </div>
+            <button id="detectButton" class="detect-button" disabled>Detect Objects</button>
+        </div>
+        
+        <div id="loadingIndicator" class="loading-indicator hidden">
+            <div class="spinner"></div>
+            <p>Processing image... AI backend is analyzing objects</p>
+        </div>
+        
+        <div id="imageContainer" class="image-container hidden">
+            <h2>📷 Image with Detections</h2>
+            <canvas id="canvasOverlay"></canvas>
+        </div>
+        
+        <div id="resultsContainer" class="results-container hidden">
+            <h2>Detection Results</h2>
+            <div id="resultsContent"></div>
+        </div>
+        
+        <div id="jsonContainer" class="json-container hidden">
+            <h2>🔧 Raw JSON Response</h2>
+            <pre id="jsonOutput"></pre>
+        </div>
+        
+        <div id="errorMessage" class="error-message hidden">
+            <h2>❌ Error</h2>
+            <p id="errorText"></p>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
+
+================================================================================
+FILE: ui-backend/templates/result.html
+COLLECTED_AT: 2025-08-17T12:27:28.255105Z
+================================================================================
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Object Detection Results</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Detection Results</h1>
+        
+        <div class="navigation">
+            <a href="/" class="back-button">← Upload Another Image</a>
+        </div>
+        
+        <div class="result-summary">
+            <h2>Summary</h2>
+            <p>File: <span id="fileName"></span></p>
+            <p>Objects detected: <span id="objectCount"></span></p>
+            <p>Processing time: <span id="processingTime"></span> ms</p>
+            <p>Model: <span id="modelName"></span></p>
+        </div>
+        
+        <div class="detection-results">
+            <h2>Detected Objects</h2>
+            <div id="detectionList"></div>
+        </div>
+    </div>
+
+    <script>
+        // This would be populated with actual results data
+        document.addEventListener('DOMContentLoaded', function() {
+            // In a real implementation, this would get data from the server
+            const results = JSON.parse(localStorage.getItem('detectionResults') || '{}');
+            
+            if (results.success) {
+                document.getElementById('fileName').textContent = results.filename || 'Unknown';
+                document.getElementById('objectCount').textContent = results.results.total_objects || 0;
+                document.getElementById('processingTime').textContent = results.results.processing_time_ms || 0;
+                document.getElementById('modelName').textContent = results.results.model_info.model_name || 'Unknown';
+                
+                const detectionList = document.getElementById('detectionList');
+                results.results.detections.forEach(detection => {
+                    const item = document.createElement('div');
+                    item.className = 'detection-item';
+                    item.innerHTML = `
+                        <h3>${detection.class_name} (${(detection.confidence * 100).toFixed(2)}%)</h3>
+                        <p>Position: (${detection.bbox.x1}, ${detection.bbox.y1}) to (${detection.bbox.x2}, ${detection.bbox.y2})</p>
+                        <p>Size: ${detection.bbox.width} x ${detection.bbox.height} pixels</p>
+                    `;
+                    detectionList.appendChild(item);
+                });
+            } else {
+                document.querySelector('.result-summary').innerHTML = '<p>Error loading results</p>';
+            }
+        });
+    </script>
+</body>
+</html>
+
+================================================================================
+FILE: ui-backend/Dockerfile
+COLLECTED_AT: 2025-08-17T12:27:28.255105Z
+================================================================================
+
+FROM python:3.9-slim
+
+WORKDIR /app
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Create upload directory
+RUN mkdir -p uploads
+
+# Expose port
+EXPOSE 5000
+
+# Run the application
+CMD ["python", "app.py"]
