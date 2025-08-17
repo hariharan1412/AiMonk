@@ -1,0 +1,146 @@
+hariharan@LAPTOP-U9UOC2PM /m/d/c/AiMonk (main)> curl -sS 'http://ip172-18-0-16-d2gst5ol2o90009m0gb0-5000.direct.labs.play-with-docker.com/health' | python -
+m json.tool
+
+Command 'python' not found, did you mean:
+
+  command 'python3' from deb python3
+  command 'python' from deb python-is-python3
+
+fish:
+curl -sS 'http://ip172-18-0-16-d2gst5ol2o90009m0gb0-5000.direct.labs.play-with-docker.com/health' | python -m json.tool
+                                                                                                    ^~~~~^
+hariharan@LAPTOP-U9UOC2PM /m/d/c/AiMonk (main) [127]> curl -sS 'http://ip172-18-0-16-d2gst5ol2o90009m0gb0-5000.direct.labs.play-with-docker.com/health' | py
+thon3 -m json.tool
+{
+    "ai_backend_status": "healthy",
+    "service": "ui-backend",
+    "status": "healthy",
+    "timestamp": "2025-08-16T15:42:00"
+}
+hariharan@LAPTOP-U9UOC2PM /m/d/c/AiMonk (main)> curl -sS 'http://ip172-18-0-16-d2gst5ol2o90009m0gb0-5001.direct.labs.play-with-docker.com/health' | python -
+m3 json.tool
+
+Command 'python' not found, did you mean:
+
+  command 'python3' from deb python3
+  command 'python' from deb python-is-python3
+
+fish:
+curl -sS 'http://ip172-18-0-16-d2gst5ol2o90009m0gb0-5001.direct.labs.play-with-docker.com/health' | python -m3 json.tool
+                                                                                                    ^~~~~^
+hariharan@LAPTOP-U9UOC2PM /m/d/c/AiMonk (main) [127]> curl -sS 'http://ip172-18-0-16-d2gst5ol2o90009m0gb0-5001.direct.labs.play-with-docker.com/health' | py
+thon3 -m json.tool
+^CTraceback (most recent call last):
+  File "/usr/lib/python3.8/runpy.py", line 194, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.8/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/usr/lib/python3.8/json/tool.py", line 56, in <module>
+    main()
+  File "/usr/lib/python3.8/json/tool.py", line 46, in main
+    objs = (json.load(infile), )
+  File "/usr/lib/python3.8/json/__init__.py", line 293, in load
+    return loads(fp.read(),
+KeyboardInterrupt
+hariharan@LAPTOP-U9UOC2PM /m/d/c/AiMonk (main) [SIGINT|SIGINT]> curl -sS 'http://ip172-18-0-16-d2gst5ol2o90009m0gb0-5001.direct.labs.play-with-docker.com/he
+alth' | python3 -m json.tool
+^CTraceback (most recent call last):
+  File "/usr/lib/python3.8/runpy.py", line 194, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.8/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/usr/lib/python3.8/json/tool.py", line 56, in <module>
+    main()
+  File "/usr/lib/python3.8/json/tool.py", line 46, in main
+    objs = (json.load(infile), )
+  File "/usr/lib/python3.8/json/__init__.py", line 293, in load
+    return loads(fp.read(),
+KeyboardInterrupt
+hariharan@LAPTOP-U9UOC2PM /m/d/c/AiMonk (main) [SIGINT|SIGINT]> curl -L -o /tmp/sample.jpg 'https://upload.wikimedia.org/wikipedia/commons/4/47/PNG_transpar
+ency_demonstration_1.png'
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100  219k  100  219k    0     0   339k      0 --:--:-- --:--:-- --:--:--  338k
+hariharan@LAPTOP-U9UOC2PM /m/d/c/AiMonk (main)> curl -v -X POST \
+                                                      -F "image=@/tmp/sample.jpg" \
+                                                      'http://ip172-18-0-16-d2gst5ol2o90009m0gb0-5000.direct.labs.play-with-docker.com/upload' \
+                                                      | python3 -m json.tool
+Note: Unnecessary use of -X or --request, POST is already inferred.
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0*   Trying 40.76.55.146:80...
+* TCP_NODELAY set
+*   Trying 64:ff9b::2879:2d00:80...
+* TCP_NODELAY set
+* Immediate connect fail for 64:ff9b::2879:2d00: Network is unreachable
+*   Trying 64:ff9b::284c:3792:80...
+* TCP_NODELAY set
+* Immediate connect fail for 64:ff9b::284c:3792: Network is unreachable
+* Connected to ip172-18-0-16-d2gst5ol2o90009m0gb0-5000.direct.labs.play-with-docker.com (40.76.55.146) port 80 (#0)
+> POST /upload HTTP/1.1
+> Host: ip172-18-0-16-d2gst5ol2o90009m0gb0-5000.direct.labs.play-with-docker.com
+> User-Agent: curl/7.68.0
+> Accept: */*
+> Content-Length: 224755
+> Content-Type: multipart/form-data; boundary=------------------------63b02fa00820af8b
+> Expect: 100-continue
+>
+* Done waiting for 100-continue
+  0  219k    0     0    0     0      0      0 --:--:--  0:00:01 --:--:--     0} [51576 bytes data]
+ 29  219k    0     0   29 65536      0  37816  0:00:05  0:00:01  0:00:04 37794* We are completely uploaded and fine
+* Mark bundle as not supporting multiuse
+< HTTP/1.1 100 Continue
+* Mark bundle as not supporting multiuse
+< HTTP/1.1 100 Continue
+100  219k    0     0  100  219k      0  79278  0:00:02  0:00:02 --:--:-- 79250* Mark bundle as not supporting multiuse
+< HTTP/1.1 200 OK
+< Server: Werkzeug/2.3.7 Python/3.9.23
+< Date: Sun, 17 Aug 2025 13:33:29 GMT
+< Content-Type: application/json
+< Content-Length: 530
+< Access-Control-Allow-Origin: http://127.0.0.1:5000
+< Vary: Origin
+< Connection: close
+<
+{ [530 bytes data]
+100  220k  100   530  100  219k    169  71760  0:00:03  0:00:03 --:--:-- 71930
+* Closing connection 0
+{
+    "filename": "sample.jpg",
+    "request_id": "45037675-1cb6-44ec-9a71-568add7ee021",
+    "results": {
+        "detections": [
+            {
+                "bbox": {
+                    "center_x": 399,
+                    "center_y": 341,
+                    "height": 347,
+                    "width": 290,
+                    "x1": 254,
+                    "x2": 544,
+                    "y1": 168,
+                    "y2": 515
+                },
+                "class_id": 75,
+                "class_name": "vase",
+                "confidence": 0.4472
+            }
+        ],
+        "image_info": {
+            "channels": 3,
+            "height": 600,
+            "width": 800
+        },
+        "model_info": {
+            "confidence_threshold": 0.25,
+            "model_name": "yolo11n.pt",
+            "total_classes": 80
+        },
+        "processing_time_ms": 275.33,
+        "request_id": "45037675-1cb6-44ec-9a71-568add7ee021",
+        "success": true,
+        "total_objects": 1
+    },
+    "success": true
+}
+hariharan@LAPTOP-U9UOC2PM /m/d/c/AiMonk (main)>                                                                                                             
