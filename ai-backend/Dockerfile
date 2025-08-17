@@ -3,8 +3,10 @@ FROM python:3.9-slim
 WORKDIR /app
 
 # Install system dependencies
+
 RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
+    libgl1 \
+    libglx-mesa0 \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
@@ -12,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     libgomp1 \
     curl \
     && rm -rf /var/lib/apt/lists/*
+
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
