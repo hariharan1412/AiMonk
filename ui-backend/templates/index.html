@@ -8,7 +8,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>🔍 Object Detection Service</h1>
+        <h1> Object Detection Service</h1>
         
         <div class="upload-section">
             <div class="file-input-container">
@@ -18,6 +18,21 @@
                 </label>
                 <span id="fileName">No file selected</span>
             </div>
+            
+            <div class="example-images-container">
+                <h3>Or select an example image:</h3>
+                <div class="example-images">
+                    <img src="{{ url_for('static', filename='example_images/dog.png') }}" 
+                         alt="Street scene" class="example-image" data-name="Dog">
+                    <img src="{{ url_for('static', filename='example_images/cycle.png') }}" 
+                         alt="Indoor scene" class="example-image" data-name="Cycle">
+                    <img src="{{ url_for('static', filename='example_images/person.png') }}" 
+                         alt="Animals" class="example-image" data-name="Person">
+                    <img src="{{ url_for('static', filename='example_images/car.png') }}" 
+                         alt="Food items" class="example-image" data-name="Car">
+                </div>
+            </div>
+            
             <button id="detectButton" class="detect-button" disabled>Detect Objects</button>
         </div>
         
@@ -27,7 +42,7 @@
         </div>
         
         <div id="imageContainer" class="image-container hidden">
-            <h2>📷 Image with Detections</h2>
+            <h2> Image with Detections</h2>
             <canvas id="canvasOverlay"></canvas>
         </div>
         
@@ -37,16 +52,15 @@
         </div>
         
         <div id="jsonContainer" class="json-container hidden">
-            <h2>🔧 Raw JSON Response</h2>
+            <h2> Raw JSON Response</h2>
             <pre id="jsonOutput"></pre>
         </div>
         
         <div id="errorMessage" class="error-message hidden">
-            <h2>❌ Error</h2>
+            <h2> Error</h2>
             <p id="errorText"></p>
         </div>
     </div>
-
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>

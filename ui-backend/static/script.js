@@ -11,14 +11,22 @@ document.addEventListener('DOMContentLoaded', function() {
     const errorMessage = document.getElementById('errorMessage');
     const errorText = document.getElementById('errorText');
     
-    let selectedFile = null;
+    // Get example images
+    const exampleImages = document.querySelectorAll('.example-image');
     
-    // Handle file selection
+    let selectedFile = null;
+    let selectedExampleImage = null;
+    
+    // Handle file selection (existing functionality)
     imageInput.addEventListener('change', function() {
         if (this.files && this.files[0]) {
             selectedFile = this.files[0];
+            selectedExampleImage = null; // Clear example selection
             fileName.textContent = selectedFile.name;
             detectButton.disabled = false;
+            
+            // Remove selection from example images
+            exampleImages.forEach(img => img.classList.remove('selected'));
         } else {
             selectedFile = null;
             fileName.textContent = 'No file selected';
@@ -26,15 +34,49 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
+    // Handle example image selection
+    exampleImages.forEach(img => {
+        img.addEventListener('click', function() {
+            selectedExampleImage = this;
+            selectedFile = null; // Clear file input
+            imageInput.value = ''; // Clear file input value
+            
+            // Update UI
+            fileName.textContent = this.dataset.name || 'Example image selected';
+            detectButton.disabled = false;
+            
+            // Visual feedback
+            exampleImages.forEach(i => i.classList.remove('selected'));
+            this.classList.add('selected');
+        });
+    });
+    
     // Handle detection button click
     detectButton.addEventListener('click', function() {
-        if (!selectedFile) {
-            showError('Please select an image file first');
-            return;
+        if (selectedFile) {
+            // Handle uploaded file (existing logic)
+            processImageDetection(selectedFile);
+        } else if (selectedExampleImage) {
+            // Handle example image selection
+            fetch(selectedExampleImage.src)
+                .then(response => response.blob())
+                .then(blob => {
+                    const filename = selectedExampleImage.dataset.name + '.jpg';
+                    const file = new File([blob], filename, { type: blob.type });
+                    processImageDetection(file);
+                })
+                .catch(error => {
+                    showError('Failed to load example image: ' + error.message);
+                });
+        } else {
+            showError('Please select an image file or example image first');
         }
-        
+    });
+    
+    // Common detection processing function
+    function processImageDetection(imageFile) {
         const formData = new FormData();
-        formData.append('image', selectedFile);
+        formData.append('image', imageFile);
         
         // Show loading, hide results
         loadingIndicator.classList.remove('hidden');
@@ -57,7 +99,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 localStorage.setItem('detectionResults', JSON.stringify(data));
                 
                 // Display image with bounding boxes
-                drawImageWithBoxes(selectedFile, data.results.detections);
+                drawImageWithBoxes(imageFile, data.results.detections);
                 
                 // Display results summary
                 displayResults(data);
@@ -72,7 +114,7 @@ document.addEventListener('DOMContentLoaded', function() {
             loadingIndicator.classList.add('hidden');
             showError('Network error: ' + error.message);
         });
-    });
+    }
     
     function drawImageWithBoxes(imageFile, detections) {
         const canvas = document.getElementById('canvasOverlay');
