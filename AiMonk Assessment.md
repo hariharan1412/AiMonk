@@ -25,7 +25,7 @@ Sample Detection Results
 This assessment includes actual output samples demonstrating the system's capabilities:
 
 **1. Application Start Interface**
-![Start Interface](https://drive.google.com/uc?export=view&id=1QRCAZxSrNBkVAccnQuA0tSZp8tbVeGHN)
+![Start Interface](https://drive.google.com/uc?export=view&id=1P4k8RiGasmB6y1lxecrD2dyDlPG3Zuo1)
 *The main upload interface showing file selection options and example images*
 
 **2. Detection in Progress**
@@ -33,11 +33,11 @@ This assessment includes actual output samples demonstrating the system's capabi
 *Visual representation of object detection with bounding boxes being drawn on the image*
 
 **3. Detection Summary**
-![Detection Summary](https://drive.google.com/uc?export=view&id=1YB3C-BmUQs_dVs0dTR3Y7IUwsDvcKqcY)
+![Detection Summary](https://drive.google.com/uc?export=view&id=1QRCAZxSrNBkVAccnQuA0tSZp8tbVeGHN)
 *Results display showing detected objects with confidence scores and position information*
 
 **4. JSON Response**
-![JSON Output](https://drive.google.com/uc?export=view&id=1P4k8RiGasmB6y1lxecrD2dyDlPG3Zuo1)
+![JSON Output](https://drive.google.com/uc?export=view&id=1YB3C-BmUQs_dVs0dTR3Y7IUwsDvcKqcY)
 *Raw JSON response showing the structured data format returned by the API*
 
 
