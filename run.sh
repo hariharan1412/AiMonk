@@ -35,7 +35,7 @@ if [ ! -f ui-backend/.env ]; then
     echo "Creating UI backend .env file..."
     cat > ui-backend/.env << EOL
 FLASK_ENV=production
-AI_BACKEND_URL=http://ai-backend:5001
+AI_BACKEND_URL=http://127.0.0.1:5001
 MAX_CONTENT_LENGTH=16777216
 UPLOAD_TIMEOUT=30
 LOG_LEVEL=INFO
